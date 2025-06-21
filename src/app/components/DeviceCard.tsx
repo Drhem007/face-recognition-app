@@ -242,7 +242,9 @@ const DeviceCard = ({ device, viewMode, isOnline: propIsOnline }: DeviceCardProp
             const originalName = file!.name;
             const nameWithoutExt = originalName.replace(/\.[^/.]+$/, ""); // Remove extension
             const extension = originalName.split('.').pop(); // Get extension
-            const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+            // Use Morocco timezone (UTC+1) for consistent date display
+            const moroccoTime = new Date(Date.now() + (1 * 60 * 60 * 1000));
+            const currentDate = moroccoTime.toISOString().split('T')[0]; // YYYY-MM-DD format
             const startTimeFormatted = timing.startTime.replace(':', '-'); // Convert HH:MM to HH-MM
             const endTimeFormatted = timing.endTime.replace(':', '-'); // Convert HH:MM to HH-MM
             

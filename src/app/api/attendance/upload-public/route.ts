@@ -103,7 +103,9 @@ export async function POST(request: NextRequest) {
     const attendanceRate = totalStudents > 0 ? (presentCount / totalStudents) * 100 : 0;
 
     // Extract time from filename or use current time
-    let examTime = new Date().toTimeString().split(' ')[0]; // HH:MM:SS format
+    // Get current time in Morocco timezone (UTC+1)
+    const moroccoTime = new Date(Date.now() + (1 * 60 * 60 * 1000)); // Add 1 hour for Morocco timezone
+    let examTime = moroccoTime.toTimeString().split(' ')[0]; // HH:MM:SS format
     
     // Try to extract time from filename (format: attendance_devicename_YYYYMMDD_HHMMSS.xlsx)
     const filenameMatch = file.name.match(/attendance_.*_\d{8}_(\d{2})(\d{2})(\d{2})/);
@@ -111,8 +113,8 @@ export async function POST(request: NextRequest) {
       examTime = `${filenameMatch[1]}:${filenameMatch[2]}:${filenameMatch[3]}`;
     }
 
-    // Always use current date when file is received (ignore any date in Excel file)
-    const examDate = new Date().toISOString().split('T')[0]; // Current date in YYYY-MM-DD format
+    // Always use current date when file is received (in Morocco timezone)
+    const examDate = moroccoTime.toISOString().split('T')[0]; // Current date in YYYY-MM-DD format
 
     // Save to database directly (NO USER AUTHENTICATION)
     const { error } = await supabaseServiceRole
