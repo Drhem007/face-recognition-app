@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { addAttendanceReport, getDeviceByIpAddress } from '../../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Create a service role client for saving student records
+const supabaseServiceRole = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 export async function POST(request: NextRequest) {
   try {
@@ -101,7 +114,7 @@ export async function POST(request: NextRequest) {
     const examDate = moroccoTime.toISOString().split('T')[0]; // Current date in YYYY-MM-DD format
 
     // Save to database using the device UUID we found
-    const { error } = await addAttendanceReport(
+    const { data: reportData, error } = await addAttendanceReport(
       device.id, // Use the UUID we found from the IP address
       totalStudents,
       presentCount,
@@ -115,6 +128,25 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Database error:', error);
       return NextResponse.json({ error: 'Failed to save attendance report to database' }, { status: 500 });
+    }
+
+    // Now save the individual student records with actual names
+    if (reportData && reportData[0]) {
+      const studentRecords = students.map(student => ({
+        attendance_report_id: reportData[0].id,
+        student_name: student[nameIndex]?.toString().trim() || '',
+        status: student[statusIndex]?.toString().trim() || ''
+      }));
+
+      const { error: studentError } = await supabaseServiceRole
+        .from('student_attendance')
+        .insert(studentRecords);
+
+      if (studentError) {
+        console.error('Error saving student records:', studentError);
+        // Continue anyway - we have the report saved
+        console.log('Continuing without individual student records...');
+      }
     }
 
     return NextResponse.json({

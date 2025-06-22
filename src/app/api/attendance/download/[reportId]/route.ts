@@ -35,32 +35,52 @@ export async function GET(
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    // Generate sample attendance data based on the report statistics
-    const attendanceData = [];
+    // Get the individual student attendance records
+    const { data: studentRecords, error: studentError } = await supabaseServiceRole
+      .from('student_attendance')
+      .select('student_name, status')
+      .eq('attendance_report_id', reportId)
+      .order('student_name');
+
+    let attendanceData = [];
     
     // Add header row
     attendanceData.push(['Student_Name', 'Status', 'Date']);
     
-    // Generate sample student data based on the statistics
-    const presentCount = report.present_students;
-    const absentCount = report.absent_students;
-    
-    // Generate present students
-    for (let i = 1; i <= presentCount; i++) {
-      attendanceData.push([
-        `Student ${i.toString().padStart(3, '0')}`,
-        'Present',
-        report.exam_date
-      ]);
-    }
-    
-    // Generate absent students
-    for (let i = 1; i <= absentCount; i++) {
-      attendanceData.push([
-        `Student ${(presentCount + i).toString().padStart(3, '0')}`,
-        'Absent',
-        report.exam_date
-      ]);
+    if (studentRecords && studentRecords.length > 0) {
+      // Use actual student records with real names like "AKRAM AYOUB"
+      studentRecords.forEach(record => {
+        attendanceData.push([
+          record.student_name,
+          record.status,
+          report.exam_date
+        ]);
+      });
+    } else {
+      // Fallback: Generate sample data based on statistics if no individual records found
+      // This handles old reports created before the student_attendance table was added
+      console.log('No individual student records found, generating fallback data');
+      
+      const presentCount = report.present_students;
+      const absentCount = report.absent_students;
+      
+      // Generate present students
+      for (let i = 1; i <= presentCount; i++) {
+        attendanceData.push([
+          `Student ${i.toString().padStart(3, '0')}`,
+          'Present',
+          report.exam_date
+        ]);
+      }
+      
+      // Generate absent students
+      for (let i = 1; i <= absentCount; i++) {
+        attendanceData.push([
+          `Student ${(presentCount + i).toString().padStart(3, '0')}`,
+          'Absent',
+          report.exam_date
+        ]);
+      }
     }
 
     // Create workbook and worksheet

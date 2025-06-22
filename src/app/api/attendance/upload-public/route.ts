@@ -14,6 +14,16 @@ const supabaseServiceRole = createClient(
   }
 );
 
+async function getDeviceByIpAddress(ipAddress: string) {
+  const { data, error } = await supabaseServiceRole
+    .from('devices')
+    .select('*')
+    .eq('ip_address', ipAddress)
+    .single();
+  
+  return { data, error };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -28,12 +38,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No device IP address provided' }, { status: 400 });
     }
 
-    // Find device by IP address using service role (bypasses RLS)
-    const { data: device, error: deviceError } = await supabaseServiceRole
-      .from('devices')
-      .select('*')
-      .eq('ip_address', deviceIp)
-      .single();
+    // Find device by IP address
+    const { data: device, error: deviceError } = await getDeviceByIpAddress(deviceIp);
     
     if (deviceError || !device) {
       return NextResponse.json({ 
@@ -104,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Extract time from filename or use current time
     // Get current time in Morocco timezone (UTC+1)
-    const moroccoTime = new Date(Date.now() + (1 * 60 * 60 * 1000)); // Add 1 hour for Morocco timezone
+    const moroccoTime = new Date(Date.now() + (1 * 60 * 60 * 1000));
     let examTime = moroccoTime.toTimeString().split(' ')[0]; // HH:MM:SS format
     
     // Try to extract time from filename (format: attendance_devicename_YYYYMMDD_HHMMSS.xlsx)
@@ -116,8 +122,8 @@ export async function POST(request: NextRequest) {
     // Always use current date when file is received (in Morocco timezone)
     const examDate = moroccoTime.toISOString().split('T')[0]; // Current date in YYYY-MM-DD format
 
-    // Save to database directly (NO USER AUTHENTICATION)
-    const { error } = await supabaseServiceRole
+    // Save to database directly (NO USER AUTHENTICATION) - First save the attendance report
+    const { data: reportData, error: reportError } = await supabaseServiceRole
       .from('attendance_reports')
       .insert([{
         device_id: device.id,
@@ -129,11 +135,29 @@ export async function POST(request: NextRequest) {
         exam_date: examDate,
         exam_time: examTime
       }])
-      .select();
+      .select('id')
+      .single();
 
-    if (error) {
-      console.error('Database error:', error);
+    if (reportError || !reportData) {
+      console.error('Database error:', reportError);
       return NextResponse.json({ error: 'Failed to save attendance report to database' }, { status: 500 });
+    }
+
+    // Now save the individual student records with actual names
+    const studentRecords = students.map(student => ({
+      attendance_report_id: reportData.id,
+      student_name: student[nameIndex]?.toString().trim() || '',
+      status: student[statusIndex]?.toString().trim() || ''
+    }));
+
+    const { error: studentError } = await supabaseServiceRole
+      .from('student_attendance')
+      .insert(studentRecords);
+
+    if (studentError) {
+      console.error('Error saving student records:', studentError);
+      // Continue anyway - we have the report saved
+      console.log('Continuing without individual student records...');
     }
 
     return NextResponse.json({
