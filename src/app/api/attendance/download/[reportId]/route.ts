@@ -36,13 +36,13 @@ export async function GET(
     }
 
     // Get the individual student attendance records
-    const { data: studentRecords, error: studentError } = await supabaseServiceRole
+    const { data: studentRecords } = await supabaseServiceRole
       .from('student_attendance')
       .select('student_name, status')
       .eq('attendance_report_id', reportId)
       .order('student_name');
 
-    let attendanceData = [];
+    const attendanceData = [];
     
     // Add header row
     attendanceData.push(['Student_Name', 'Status', 'Date']);
